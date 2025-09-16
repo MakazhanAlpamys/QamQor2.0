@@ -2,10 +2,6 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 
-// Auth Components
-import Login from './components/auth/Login';
-import Register from './components/auth/Register';
-
 // User Components
 import UserLayout from './components/layouts/UserLayout';
 import MainPage from './components/user/MainPage';
@@ -23,22 +19,64 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 
 // Protected routes
 const UserRoute = ({ children }) => {
-  const { isAuthenticated, user, loading } = useAuth();
+  const { isAuthenticated, loading, error } = useAuth();
   
-  if (loading) return <div>Жүктелуде...</div>;
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        flexDirection: 'column'
+      }}>
+        <div>Жүктелуде...</div>
+        {error && <div style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
+      </div>
+    );
+  }
   
-  if (!isAuthenticated) return <Navigate to="/login" />;
+  if (!isAuthenticated) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        flexDirection: 'column',
+        textAlign: 'center',
+        padding: '20px'
+      }}>
+        <h2>QamQor</h2>
+        <p>Telegram Mini App арқылы кіру керек</p>
+        {error && <div style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
+      </div>
+    );
+  }
   
   return children;
 };
 
 const AdminRoute = ({ children }) => {
-  const { isAuthenticated, user, loading } = useAuth();
+  const { isAuthenticated, user, loading, error } = useAuth();
   
-  if (loading) return <div>Жүктелуде...</div>;
+  if (loading) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        flexDirection: 'column'
+      }}>
+        <div>Жүктелуде...</div>
+        {error && <div style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
+      </div>
+    );
+  }
   
   if (!isAuthenticated || user?.role !== 'admin') {
-    return <Navigate to="/login" />;
+    return <Navigate to="/" />;
   }
   
   return children;
@@ -50,11 +88,6 @@ function AppRoutes() {
   return (
     <Router>
       <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={!isAuthenticated ? <Login /> : 
-          (user?.role === 'admin' ? <Navigate to="/admin" /> : <Navigate to="/" />)} />
-        <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to="/" />} />
-        
         {/* User routes */}
         <Route path="/" element={
           <UserRoute>
@@ -77,8 +110,8 @@ function AppRoutes() {
           <Route path="profile" element={<AdminProfilePage />} />
         </Route>
         
-        {/* Redirect to login for any unknown path */}
-        <Route path="*" element={<Navigate to="/login" />} />
+        {/* Redirect to main page for any unknown path */}
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>
   );

@@ -1,71 +1,60 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { FaUser, FaEdit, FaSignOutAlt } from 'react-icons/fa';
+import { FaUser, FaTelegram, FaEdit, FaSave, FaTimes, FaUserTag } from 'react-icons/fa';
 import '../../styles/ProfilePage.css';
 // Импортируем логотипы
 import logo from '../../img/logo.jpg';
 import logo2 from '../../img/logo2.png';
 
 const ProfilePage = () => {
-  const { user, logout, updateProfile } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
-  const [name, setName] = useState(user?.name || '');
-  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
   
-  // Format date to display
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('kk-KZ', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
+  useEffect(() => {
+    if (user) {
+      setName(user.name || '');
+    }
+  }, [user]);
   
-  const handleEditClick = () => {
+  const handleEdit = () => {
     setIsEditing(true);
+    setError('');
     setSuccess('');
-    setError('');
   };
   
-  const handleCancelEdit = () => {
+  const handleCancel = () => {
     setIsEditing(false);
-    setName(user?.name || '');
+    setName(user.name || '');
     setError('');
+    setSuccess('');
   };
   
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
+  const handleSave = async () => {
     if (!name.trim()) {
-      setError('Аты-жөні қажет');
+      setError('Атыңызды енгізіңіз');
       return;
     }
     
     try {
       setLoading(true);
       setError('');
-      
-      await updateProfile({ name });
-      setIsEditing(false);
+      await updateProfile({ name: name.trim() });
       setSuccess('Профиль сәтті жаңартылды');
+      setIsEditing(false);
       
       // Clear success message after 3 seconds
       setTimeout(() => {
         setSuccess('');
       }, 3000);
     } catch (err) {
-      console.error('Profile update error:', err);
-      setError(err.response?.data?.message || 'Профильді жаңарту кезінде қате орын алды');
+      setError(err.response?.data?.message || 'Профиль жаңарту қатесі');
     } finally {
       setLoading(false);
     }
-  };
-  
-  const handleLogout = () => {
-    logout();
   };
   
   if (!user) {
@@ -84,6 +73,7 @@ const ProfilePage = () => {
           <FaUser />
         </div>
         <h1>Профиль</h1>
+        <p className="profile-subtitle">Telegram арқылы кірген</p>
       </div>
       
       {error && <div className="profile-error">{error}</div>}
@@ -91,7 +81,7 @@ const ProfilePage = () => {
       
       <div className="profile-card">
         {isEditing ? (
-          <form className="profile-form" onSubmit={handleSubmit}>
+          <div className="edit-section">
             <div className="form-group">
               <label htmlFor="name">Аты-жөні</label>
               <input
@@ -103,50 +93,86 @@ const ProfilePage = () => {
               />
             </div>
             
-            <div className="profile-actions">
+            <div className="edit-buttons">
               <button 
-                type="button" 
-                className="cancel-button"
-                onClick={handleCancelEdit}
+                className="save-button" 
+                onClick={handleSave}
                 disabled={loading}
               >
-                Болдырмау
-              </button>
-              <button 
-                type="submit" 
-                className="save-button"
-                disabled={loading}
-              >
+                <FaSave />
                 {loading ? 'Сақталуда...' : 'Сақтау'}
               </button>
+              <button 
+                className="cancel-button" 
+                onClick={handleCancel}
+                disabled={loading}
+              >
+                <FaTimes />
+                Бас тарту
+              </button>
             </div>
-          </form>
+          </div>
         ) : (
-          <>
-            <div className="profile-info">
-              <div className="info-item">
+          <div className="profile-info">
+            <div className="info-item">
+              <div className="info-header">
+                <FaUser className="info-icon" />
                 <span className="info-label">Аты-жөні:</span>
+              </div>
+              <div className="info-content">
                 <span className="info-value">{user.name}</span>
-              </div>
-              <div className="info-item">
-                <span className="info-label">Email:</span>
-                <span className="info-value">{user.email}</span>
-              </div>
-              <div className="info-item">
-                <span className="info-label">Тіркелген күні:</span>
-                <span className="info-value">{formatDate(user.created_at)}</span>
+                <button className="edit-button" onClick={handleEdit}>
+                  <FaEdit />
+                  Өзгерту
+                </button>
               </div>
             </div>
             
-            <button 
-              className="edit-button"
-              onClick={handleEditClick}
-            >
-              <FaEdit />
-              <span>Профильді өңдеу</span>
-            </button>
-          </>
+            <div className="info-item">
+              <div className="info-header">
+                <FaTelegram className="info-icon" />
+                <span className="info-label">Telegram аккаунты:</span>
+              </div>
+              <span className="info-value">@{user.username || 'Жоқ'}</span>
+            </div>
+            
+            <div className="info-item">
+              <div className="info-header">
+                <FaUserTag className="info-icon" />
+                <span className="info-label">Telegram ID:</span>
+              </div>
+              <span className="info-value">{user.telegram_id}</span>
+            </div>
+            
+            <div className="info-item">
+              <div className="info-header">
+                <span className="info-label">Роль:</span>
+              </div>
+              <span className={`role-badge ${user.role}`}>
+                {user.role === 'admin' ? 'Администратор' : 'Пайдаланушы'}
+              </span>
+            </div>
+            
+            <div className="info-item">
+              <div className="info-header">
+                <span className="info-label">Тіркелген күні:</span>
+              </div>
+              <span className="info-value">
+                {new Date(user.created_at).toLocaleDateString('kk-KZ')}
+              </span>
+            </div>
+          </div>
         )}
+      </div>
+      
+      <div className="profile-info-card">
+        <div className="info-card">
+          <FaTelegram className="telegram-icon" />
+          <div className="info-content">
+            <h3>Telegram Mini App</h3>
+            <p>Сіз Telegram арқылы кірдіңіз. Деректеріңіз қауіпсіз сақталуда.</p>
+          </div>
+        </div>
       </div>
       
       <div className="logos-container">
@@ -155,16 +181,8 @@ const ProfilePage = () => {
           <img src={logo2} alt="Assyl AI Logo" className="profile-logo" />
         </div>
       </div>
-      
-      <button 
-        className="logout-button"
-        onClick={handleLogout}
-      >
-        <FaSignOutAlt />
-        <span>Шығу</span>
-      </button>
     </div>
   );
 };
 
-export default ProfilePage; 
+export default ProfilePage;

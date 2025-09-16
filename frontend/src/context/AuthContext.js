@@ -12,40 +12,64 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Check if user is already logged in
+  // Check if user is already logged in or try Telegram auth
   useEffect(() => {
-    const checkLoggedIn = async () => {
+    const initAuth = async () => {
       setLoading(true);
-      const token = localStorage.getItem('token');
       
+      // First check for existing token
+      const token = localStorage.getItem('token');
       if (token) {
         try {
-          // Set token in axios default headers
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          
-          // Fetch current user data
           const response = await axios.get(`${API_URL}/profile`);
           setUser(response.data);
+          setLoading(false);
+          return;
         } catch (err) {
-          console.error('Auth check error:', err);
+          console.error('Token validation failed:', err);
           localStorage.removeItem('token');
           delete axios.defaults.headers.common['Authorization'];
         }
       }
       
+      // Try Telegram Web App authentication
+      if (window.Telegram?.WebApp) {
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        
+        // Expand the app to full height
+        tg.expand();
+        
+        if (tg.initDataUnsafe?.user) {
+          try {
+            await loginWithTelegram(tg.initDataUnsafe);
+          } catch (err) {
+            console.error('Telegram auth failed:', err);
+            setError('Telegram арқылы кіру сәтсіз аяқталды');
+          }
+        } else {
+          setError('Telegram деректері табылмады');
+        }
+      } else {
+        // For development - create a mock user
+        console.warn('Telegram WebApp not available, using demo mode');
+        await createDemoUser();
+      }
+      
       setLoading(false);
     };
     
-    checkLoggedIn();
+    initAuth();
   }, []);
   
-  // Register user
-  const register = async (userData) => {
+  // Login with Telegram
+  const loginWithTelegram = async (initData) => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await axios.post(`${API_URL}/auth/register`, userData);
+      const response = await axios.post(`${API_URL}/auth/telegram`, { initData });
       const { token, user } = response.data;
       
       // Save token and set headers
@@ -55,37 +79,33 @@ export const AuthProvider = ({ children }) => {
       setUser(user);
       return user;
     } catch (err) {
-      setError(err.response?.data?.message || 'Тіркелу кезінде қате орын алды');
+      setError(err.response?.data?.message || 'Telegram арқылы кіру кезінде қате орын алды');
       throw err;
     } finally {
       setLoading(false);
     }
   };
   
-  // Login user
-  const login = async (credentials) => {
+  // Create demo user for development
+  const createDemoUser = async () => {
     try {
-      setLoading(true);
-      setError(null);
+      const demoInitData = {
+        user: {
+          id: 123456789,
+          first_name: 'Demo',
+          last_name: 'User',
+          username: 'demo_user'
+        }
+      };
       
-      const response = await axios.post(`${API_URL}/auth/login`, credentials);
-      const { token, user } = response.data;
-      
-      // Save token and set headers
-      localStorage.setItem('token', token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      setUser(user);
-      return user;
+      await loginWithTelegram(demoInitData);
     } catch (err) {
-      setError(err.response?.data?.message || 'Кіру кезінде қате орын алды');
-      throw err;
-    } finally {
-      setLoading(false);
+      console.error('Demo user creation failed:', err);
+      setError('Demo режиміндегі қателік');
     }
   };
   
-  // Logout user
+  // Logout user (only clears local data, Telegram session remains)
   const logout = () => {
     localStorage.removeItem('token');
     delete axios.defaults.headers.common['Authorization'];
@@ -113,8 +133,8 @@ export const AuthProvider = ({ children }) => {
     user,
     loading,
     error,
-    register,
-    login,
+    loginWithTelegram,
+    createDemoUser,
     logout,
     updateProfile,
     isAuthenticated: !!user

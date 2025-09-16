@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Load environment variables
@@ -38,8 +39,10 @@ async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL,
-        email VARCHAR(100) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
+        email VARCHAR(100),
+        password VARCHAR(255),
+        telegram_id BIGINT UNIQUE,
+        username VARCHAR(100),
         role VARCHAR(10) NOT NULL DEFAULT 'user',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -75,18 +78,20 @@ async function initializeDatabase() {
       );
     `);
 
-    // Check if admin user exists, create if not
-    const adminResult = await client.query(`
-      SELECT * FROM users WHERE email = 'admin@qamqor.kz'
-    `);
+    // Check if admin user exists by telegram_id from env, create if not
+    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+    if (adminTelegramId) {
+      const adminResult = await client.query(`
+        SELECT * FROM users WHERE telegram_id = $1
+      `, [adminTelegramId]);
 
-    if (adminResult.rowCount === 0) {
-      const hashedPassword = await bcrypt.hash('QamqorAdmin123', 10);
-      await client.query(`
-        INSERT INTO users (name, email, password, role)
-        VALUES ('Admin', 'admin@qamqor.kz', $1, 'admin')
-      `, [hashedPassword]);
-      console.log('Admin user created successfully.');
+      if (adminResult.rowCount === 0) {
+        await client.query(`
+          INSERT INTO users (name, telegram_id, role)
+          VALUES ('Admin', $1, 'admin')
+        `, [adminTelegramId]);
+        console.log('Admin user created successfully.');
+      }
     }
 
     // Add some initial quotes and tips if tables are empty
@@ -133,9 +138,37 @@ function authenticateToken(req, res, next) {
   });
 }
 
+// Telegram data validation function
+function validateTelegramData(data, botToken) {
+  if (!botToken) {
+    console.warn('Bot token not provided, skipping Telegram validation');
+    return true; // Allow in development
+  }
+  
+  const { hash, ...userData } = data;
+  
+  if (!hash) return false;
+  
+  // Create data-check-string
+  const dataCheckString = Object.keys(userData)
+    .sort()
+    .map(key => `${key}=${userData[key]}`)
+    .join('\n');
+  
+  // Create secret key
+  const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+  
+  // Create hash
+  const calculatedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+  
+  return calculatedHash === hash;
+}
+
 // Admin middleware
 function isAdmin(req, res, next) {
-  if (req.user && req.user.role === 'admin') {
+  const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+  
+  if (req.user && (req.user.role === 'admin' || req.user.telegram_id == adminTelegramId)) {
     next();
   } else {
     res.status(403).json({ message: 'Админ рұқсаты қажет' });
@@ -143,94 +176,78 @@ function isAdmin(req, res, next) {
 }
 
 // API Routes
-// Auth routes
-app.post('/api/auth/register', async (req, res) => {
+// Telegram Auth route
+app.post('/api/auth/telegram', async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { initData } = req.body;
     
-    // Validation
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: 'Барлық өрістер толтырылуы керек' });
+    if (!initData || !initData.user) {
+      return res.status(400).json({ message: 'Telegram деректері жоқ' });
     }
     
-    if (password.length < 8) {
-      return res.status(400).json({ message: 'Құпия сөз кемінде 8 таңбадан тұруы керек' });
+    // Validate Telegram data (optional in development)
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    if (botToken && !validateTelegramData(initData, botToken)) {
+      return res.status(401).json({ message: 'Telegram деректері жарамсыз' });
     }
     
-    // Check if user already exists
-    const userCheck = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    if (userCheck.rows.length > 0) {
-      return res.status(400).json({ message: 'Бұл email тіркелген' });
-    }
+    const telegramUser = initData.user;
+    const telegramId = telegramUser.id;
+    const firstName = telegramUser.first_name || 'Пайдаланушы';
+    const lastName = telegramUser.last_name || '';
+    const username = telegramUser.username || `user_${telegramId}`;
+    const fullName = `${firstName} ${lastName}`.trim();
     
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // Check if user exists
+    let userResult = await pool.query('SELECT * FROM users WHERE telegram_id = $1', [telegramId]);
+    let user;
     
-    // Create user
-    const result = await pool.query(
-      'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email, role',
-      [name, email, hashedPassword]
-    );
-    
-    const user = result.rows[0];
-    
-    // Generate token
-    const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role }, 
-      process.env.JWT_SECRET || 'qamqor_secret_key',
-      { expiresIn: '24h' }
-    );
-    
-    res.status(201).json({ user, token });
-  } catch (err) {
-    console.error('Registration error:', err);
-    res.status(500).json({ message: 'Сервер қатесі' });
-  }
-});
-
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    // Validation
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email және құпия сөз қажет' });
-    }
-    
-    // Find user
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    
-    if (result.rows.length === 0) {
-      return res.status(401).json({ message: 'Email немесе құпия сөз қате' });
-    }
-    
-    const user = result.rows[0];
-    
-    // Check password
-    const validPassword = await bcrypt.compare(password, user.password);
-    
-    if (!validPassword) {
-      return res.status(401).json({ message: 'Email немесе құпия сөз қате' });
+    if (userResult.rows.length === 0) {
+      // Create new user
+      const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+      const role = telegramId == adminTelegramId ? 'admin' : 'user';
+      
+      const createResult = await pool.query(
+        'INSERT INTO users (name, telegram_id, username, role) VALUES ($1, $2, $3, $4) RETURNING id, name, telegram_id, username, role, created_at',
+        [fullName, telegramId, username, role]
+      );
+      user = createResult.rows[0];
+      console.log('New user created:', user);
+    } else {
+      user = userResult.rows[0];
+      
+      // Update role if needed (for admin)
+      const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
+      if (telegramId == adminTelegramId && user.role !== 'admin') {
+        await pool.query('UPDATE users SET role = $1 WHERE id = $2', ['admin', user.id]);
+        user.role = 'admin';
+      }
     }
     
     // Generate token
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role }, 
+      { 
+        id: user.id, 
+        telegram_id: telegramId, 
+        role: user.role 
+      }, 
       process.env.JWT_SECRET || 'qamqor_secret_key',
-      { expiresIn: '24h' }
+      { expiresIn: '30d' }
     );
     
     res.json({ 
       user: {
         id: user.id,
         name: user.name,
-        email: user.email,
-        role: user.role
+        telegram_id: user.telegram_id,
+        username: user.username,
+        role: user.role,
+        created_at: user.created_at
       }, 
       token 
     });
   } catch (err) {
-    console.error('Login error:', err);
+    console.error('Telegram auth error:', err);
     res.status(500).json({ message: 'Сервер қатесі' });
   }
 });
@@ -238,7 +255,7 @@ app.post('/api/auth/login', async (req, res) => {
 // Profile route
 app.get('/api/profile', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, name, email, role, created_at FROM users WHERE id = $1', [req.user.id]);
+    const result = await pool.query('SELECT id, name, telegram_id, username, role, created_at FROM users WHERE id = $1', [req.user.id]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ message: 'Пайдаланушы табылмады' });
@@ -260,7 +277,7 @@ app.put('/api/profile', authenticateToken, async (req, res) => {
     }
     
     const result = await pool.query(
-      'UPDATE users SET name = $1 WHERE id = $2 RETURNING id, name, email, role',
+      'UPDATE users SET name = $1 WHERE id = $2 RETURNING id, name, telegram_id, username, role',
       [name, req.user.id]
     );
     
