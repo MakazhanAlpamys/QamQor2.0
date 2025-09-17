@@ -85,6 +85,13 @@ const AdminRoute = ({ children }) => {
 function AppRoutes() {
   const { isAuthenticated, user } = useAuth();
   
+  // Debug: log user role for admin access
+  useEffect(() => {
+    if (user) {
+      console.log('Current user:', { id: user.id, name: user.name, role: user.role, telegram_id: user.telegram_id });
+    }
+  }, [user]);
+  
   return (
     <Router>
       <Routes>

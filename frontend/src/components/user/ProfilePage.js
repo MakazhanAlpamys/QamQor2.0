@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { FaUser, FaTelegram, FaEdit, FaSave, FaTimes, FaUserTag } from 'react-icons/fa';
+import { FaUser, FaTelegram, FaEdit, FaSave, FaTimes, FaUserTag, FaCog } from 'react-icons/fa';
 import '../../styles/ProfilePage.css';
 // Импортируем логотипы
 import logo from '../../img/logo.jpg';
@@ -152,6 +153,19 @@ const ProfilePage = () => {
                 {user.role === 'admin' ? 'Администратор' : 'Пайдаланушы'}
               </span>
             </div>
+            
+            {user.role === 'admin' && (
+              <div className="info-item admin-access">
+                <div className="info-header">
+                  <FaCog className="info-icon" />
+                  <span className="info-label">Админ панель:</span>
+                </div>
+                <Link to="/admin" className="admin-button">
+                  <FaCog />
+                  Админ панель
+                </Link>
+              </div>
+            )}
             
             <div className="info-item">
               <div className="info-header">

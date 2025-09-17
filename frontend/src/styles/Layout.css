@@ -22,12 +22,40 @@
   background-color: #1976d2;
   color: white;
   padding: 0.5rem 1rem;
-  text-align: center;
+}
+
+.admin-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
 }
 
 .admin-header h1 {
   margin: 0;
   font-size: 1.25rem;
+}
+
+.back-to-user {
+  position: absolute;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.back-to-user:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  transform: translateX(-2px);
+  color: white;
+  text-decoration: none;
 }
 
 /* Bottom Navigation */

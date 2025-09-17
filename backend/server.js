@@ -88,6 +88,7 @@ async function initializeDatabase() {
     // Check if admin user exists by telegram_id from env, create if not
     const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
     if (adminTelegramId) {
+      console.log(`Admin Telegram ID configured: ${adminTelegramId}`);
       const adminResult = await client.query(`
         SELECT * FROM users WHERE telegram_id = $1
       `, [adminTelegramId]);
@@ -98,7 +99,11 @@ async function initializeDatabase() {
           VALUES ('Admin', $1, 'admin')
         `, [adminTelegramId]);
         console.log('Admin user created successfully.');
+      } else {
+        console.log('Admin user already exists.');
       }
+    } else {
+      console.warn('⚠️  ADMIN_TELEGRAM_ID not set! Admin panel will not be accessible.');
     }
 
     // Add some initial quotes and tips if tables are empty
@@ -171,13 +176,13 @@ function validateTelegramData(data, botToken) {
   return calculatedHash === hash;
 }
 
-// Admin middleware
+// Admin middleware - enhanced security
 function isAdmin(req, res, next) {
-  const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
-  
-  if (req.user && (req.user.role === 'admin' || req.user.telegram_id == adminTelegramId)) {
+  // Only check role from database, don't trust JWT telegram_id
+  if (req.user && req.user.role === 'admin') {
     next();
   } else {
+    console.warn(`Unauthorized admin access attempt by user ID: ${req.user?.id}, role: ${req.user?.role}`);
     res.status(403).json({ message: 'Админ рұқсаты қажет' });
   }
 }
@@ -371,8 +376,9 @@ app.post('/api/feedback', authenticateToken, async (req, res) => {
   }
 });
 
-// Admin routes
+// Admin routes with logging
 app.get('/api/admin/messages', authenticateToken, isAdmin, async (req, res) => {
+  console.log(`Admin action: User ${req.user.id} (${req.user.telegram_id}) accessed feedback messages`);
   try {
     const { search } = req.query;
     let query = 'SELECT * FROM feedback';
@@ -395,6 +401,7 @@ app.get('/api/admin/messages', authenticateToken, isAdmin, async (req, res) => {
 });
 
 app.get('/api/admin/content/quotes', authenticateToken, isAdmin, async (req, res) => {
+  console.log(`Admin action: User ${req.user.id} accessed quotes management`);
   try {
     const result = await pool.query('SELECT * FROM quotes ORDER BY created_at DESC');
     res.json(result.rows);
@@ -405,6 +412,7 @@ app.get('/api/admin/content/quotes', authenticateToken, isAdmin, async (req, res
 });
 
 app.post('/api/admin/content/quotes', authenticateToken, isAdmin, async (req, res) => {
+  console.log(`Admin action: User ${req.user.id} added new quote: "${req.body.text?.substring(0, 50)}..."`);
   try {
     const { text } = req.body;
     

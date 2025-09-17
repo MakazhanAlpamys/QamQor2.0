@@ -1,6 +1,6 @@
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, Link } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { FaEdit, FaComments, FaUser } from 'react-icons/fa';
+import { FaEdit, FaComments, FaUser, FaArrowLeft } from 'react-icons/fa';
 import '../../styles/Layout.css';
 
 const AdminLayout = () => {
@@ -19,7 +19,13 @@ const AdminLayout = () => {
   return (
     <div className="layout-container">
       <div className="admin-header">
-        <h1>QamQor Админ</h1>
+        <div className="admin-header-content">
+          <Link to="/" className="back-to-user">
+            <FaArrowLeft />
+            <span>Пайдаланушы режиміне</span>
+          </Link>
+          <h1>QamQor Админ</h1>
+        </div>
       </div>
       
       <div className="content-container">
