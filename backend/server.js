@@ -13,7 +13,10 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
 app.use(express.json());
 
 // Database connection
@@ -26,7 +29,7 @@ const pool = new pg.Pool({
 });
 
 // Initialize Google Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'AIzaSyDvdyss_1je7sczXOSzie2GzdUc6VUFHIc');
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Database initialization function
 async function initializeDatabase() {
@@ -529,6 +532,14 @@ app.post('/api/chat', authenticateToken, async (req, res) => {
     
     Жауаптарыңды қазақ тілінде бер, қысқа және нақты түрде.`;
     
+    // Check if Gemini API key is available
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(503).json({ 
+        message: 'AI сервисі қазіргі уақытта қолжетімсіз',
+        response: 'Кешіріңіз, AI көмекші қазіргі уақытта жұмыс істемейді. Кейінірек қайтадан көріңіз.'
+      });
+    }
+
     // Generate Gemini response
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     const result = await model.generateContent([
