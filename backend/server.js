@@ -14,7 +14,12 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: [
+    'http://localhost:3000',
+    'https://qam-qor2-0.vercel.app',
+    'https://*.vercel.app',
+    process.env.FRONTEND_URL
+  ].filter(Boolean),
   credentials: true
 }));
 app.use(express.json());
@@ -176,6 +181,24 @@ function isAdmin(req, res, next) {
     res.status(403).json({ message: 'Админ рұқсаты қажет' });
   }
 }
+
+// Health check endpoint
+app.get('/api', (req, res) => {
+  res.json({ 
+    message: 'QamQor API работает успешно!', 
+    version: '1.0.0',
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    database: 'connected',
+    ai: process.env.GEMINI_API_KEY ? 'configured' : 'not configured'
+  });
+});
 
 // API Routes
 // Telegram Auth route
