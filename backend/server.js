@@ -86,21 +86,24 @@ async function initializeDatabase() {
     `);
 
     // Check if admin user exists by telegram_id from env, create if not
-    const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
-    if (adminTelegramId) {
-      console.log(`Admin Telegram ID configured: ${adminTelegramId}`);
-      const adminResult = await client.query(`
-        SELECT * FROM users WHERE telegram_id = $1
-      `, [adminTelegramId]);
-
-      if (adminResult.rowCount === 0) {
-        await client.query(`
-          INSERT INTO users (name, telegram_id, role)
-          VALUES ('Admin', $1, 'admin')
+    const adminIds = process.env.ADMIN_TELEGRAM_ID ? process.env.ADMIN_TELEGRAM_ID.split(",").map(id => Number(id)) : [];
+    if (adminIds.length > 0) {
+      console.log(`Admin Telegram IDs configured:`, adminIds);
+      
+      for (const adminTelegramId of adminIds) {
+        const adminResult = await client.query(`
+          SELECT * FROM users WHERE telegram_id = $1
         `, [adminTelegramId]);
-        console.log('Admin user created successfully.');
-      } else {
-        console.log('Admin user already exists.');
+
+        if (adminResult.rowCount === 0) {
+          await client.query(`
+            INSERT INTO users (name, telegram_id, role)
+            VALUES ('Admin', $1, 'admin')
+          `, [adminTelegramId]);
+          console.log(`Admin user created successfully for ID: ${adminTelegramId}`);
+        } else {
+          console.log(`Admin user already exists for ID: ${adminTelegramId}`);
+        }
       }
     } else {
       console.warn('⚠️  ADMIN_TELEGRAM_ID not set! Admin panel will not be accessible.');
@@ -234,8 +237,8 @@ app.post('/api/auth/telegram', async (req, res) => {
     
     if (userResult.rows.length === 0) {
       // Create new user
-      const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
-      const role = telegramId == adminTelegramId ? 'admin' : 'user';
+      const adminIds = process.env.ADMIN_TELEGRAM_ID ? process.env.ADMIN_TELEGRAM_ID.split(",").map(id => Number(id)) : [];
+      const role = adminIds.includes(Number(telegramId)) ? 'admin' : 'user';
       
       const createResult = await pool.query(
         'INSERT INTO users (name, telegram_id, username, role) VALUES ($1, $2, $3, $4) RETURNING id, name, telegram_id, username, role, created_at',
@@ -247,8 +250,8 @@ app.post('/api/auth/telegram', async (req, res) => {
       user = userResult.rows[0];
       
       // Update role if needed (for admin)
-      const adminTelegramId = process.env.ADMIN_TELEGRAM_ID;
-      if (telegramId == adminTelegramId && user.role !== 'admin') {
+      const adminIds = process.env.ADMIN_TELEGRAM_ID ? process.env.ADMIN_TELEGRAM_ID.split(",").map(id => Number(id)) : [];
+      if (adminIds.includes(Number(telegramId)) && user.role !== 'admin') {
         await pool.query('UPDATE users SET role = $1 WHERE id = $2', ['admin', user.id]);
         user.role = 'admin';
       }
