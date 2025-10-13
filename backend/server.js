@@ -30,7 +30,11 @@ const pool = new pg.Pool({
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASS || 'postgres',
   database: process.env.DB_NAME || 'qamqor',
-  port: process.env.DB_PORT || 5432
+  port: process.env.DB_PORT || 5432,
+  ssl: {
+    require: true,
+    rejectUnauthorized: false
+  }
 });
 
 // Initialize Google Gemini AI
